@@ -10,6 +10,7 @@ enum class DownloadState
 	QUEUED,
 	DOWNLOADING,
 	DOWNLOADED,
+	CONVERTING,
 	ABORTED,
 	ERROR_
 };
@@ -58,6 +59,7 @@ public:
 class YoutubeDlOptionBuilder
 {
 public:
+	void SetOutputPath(std::string path) { command += " -o \"" + path + "/%(title)s.%(ext)s\""; }
 	void GetAllFromPlayList() { command += " --yes-playlist"; }
 	void Url(std::string url) { command += " \"" + url + "\""; }
 	void Json() { command += " --dump-json"; };

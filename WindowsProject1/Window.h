@@ -13,6 +13,7 @@
 #include <wx/event.h>
 #include <functional>
 #include "TaskEvent.h"
+#include <mutex>
 
 const wxAuiPaneInfo DEFAULT_PANE_HINTS = wxAuiPaneInfo().CenterPane().CaptionVisible(false).CloseButton(false);
 
@@ -90,11 +91,14 @@ class MainPanel : public EmptyPanel
 	DownloadQueueListCtrl* m_listCtrl_download_queue;
 	wxDirPickerCtrl* m_dirPicker1;
 	CustomComboBox* combo_box;
-
+	//TODO: thread worker pool
+	int busy_count = 0;
+	std::mutex mutex;
 public:
 	MainPanel(int x, int y, int w, int h, wxWindow* parent = nullptr);
 	void InitializeComponents();
-	void OnButtonClicked(wxCommandEvent& _event);
+	void OnDownloadButtonClicked(wxCommandEvent& _event);
+	void OnAddButtonClicked(wxCommandEvent& _event);
 	void OnButtonClickedSettings(wxCommandEvent& _event);
 	DownloadListItem* AddDownloadListItem(DownloadItem item) { return m_listCtrl_download_queue->Add(item); } // returns the row
 	void RemoveDownloadListItem(DownloadListItem* item) { m_listCtrl_download_queue->RemoveRefs(&item, 1); }

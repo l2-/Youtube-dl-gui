@@ -13,7 +13,7 @@ using namespace std;
 
 void MainPanel::InitializeComponents()
 {
-	m_button_add->Bind(wxEVT_BUTTON, [this](auto arg) {OnButtonClicked(arg); });
+	m_button_add->Bind(wxEVT_BUTTON, [this](auto arg) {OnAddButtonClicked(arg); });
 	m_button_settings->Bind(wxEVT_BUTTON, [this](auto arg) {OnButtonClickedSettings(arg); });
 }
 
@@ -138,6 +138,7 @@ MainPanel::MainPanel(int x, int y, int w, int h, wxWindow* parent) : EmptyPanel(
 	gSizer4->Add(bSizer6, 0, 0, 5);
 
 	m_button_download = new wxButton(this, wxID_ANY, wxT("Download"), wxDefaultPosition, wxDefaultSize, 0);
+	m_button_download->Bind(wxEVT_BUTTON, &MainPanel::OnDownloadButtonClicked, this);
 	gSizer4->Add(m_button_download, 0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT | wxALL, 5);
 
 
@@ -200,13 +201,50 @@ void HandleYoutubeDLOutputStream(MainPanel* mp, string str, DownloadItem item, D
 	});
 }
 
-void MainPanel::OnButtonClicked(wxCommandEvent& _event)
+void MainPanel::OnDownloadButtonClicked(wxCommandEvent& _event)
+{
+	auto items = m_listCtrl_download_queue->GetListItems();
+	for (auto& item : items)
+	{
+		if (item->item.state == DownloadState::QUEUED)
+		{
+			ExeInterface::outputCallback parseFinal = [this, item, items](std::string str) -> void {
+				Globals::InvokeOnMain([=]()
+				{
+					item->item.state = DownloadState::DOWNLOADED;
+					item->Update();
+					Update();
+				});
+			};
+			ExeInterface::errorOutputCallback parseError = [this, item, items](std::string str) -> void {
+				Globals::InvokeOnMain([=]()
+				{
+					item->item.state = DownloadState::ERROR_;
+					item->Update();
+					Update();
+				});
+			};
+
+			item->item.state = DownloadState::DOWNLOADING;
+			item->Update();
+			Update();
+
+			YoutubeDlOptionBuilder builder;
+			builder.SetOutputPath(Globals::GetSettings().download_path);
+			builder.Url(item->item.url);
+
+			cout << builder.ToString() << endl;
+			ExeInterface::Execute1(Globals::GetSettings().youtube_dl_path, builder.ToString(), nullptr, parseFinal, parseError);
+		}
+	}
+}
+
+void MainPanel::OnAddButtonClicked(wxCommandEvent& _event)
 {
 	vector<DownloadItem> items;
-	vector<DownloadListItem*> item_refs;
 	for (int i = 0; i < m_textCtrl3->GetNumberOfLines(); i++)
 	{
-		string url = string(m_textCtrl3->GetLineText(i));
+		string url = m_textCtrl3->GetLineText(i).ToStdString();
 		if (url.length() > 0)
 		{
 			DownloadItem item;
@@ -214,8 +252,18 @@ void MainPanel::OnButtonClicked(wxCommandEvent& _event)
 			item.extension = Globals::GetSettings().container;
 			item.state = DownloadState::PENDING;
 			items.push_back(item);
-			item_refs.push_back(AddDownloadListItem(item));
 		}
+	}
+
+	//{
+	//	std::lock_guard<std::mutex> lock(mutex);
+	//	busy_count += items.size();
+	//}
+
+	vector<DownloadListItem*> item_refs;
+	for (auto& item : items)
+	{
+		item_refs.push_back(AddDownloadListItem(item));
 	}
 
 	Update();
@@ -227,6 +275,10 @@ void MainPanel::OnButtonClicked(wxCommandEvent& _event)
 
 		ExeInterface::outputCallback parseFinal = [this, item, item_ref](std::string str) -> void {
 			HandleYoutubeDLOutputStream(this, str, item, item_ref);
+			//{
+			//	std::lock_guard<std::mutex> lock{ mutex };
+			//	busy_count--;
+			//}
 		};
 		ExeInterface::errorOutputCallback parseError = [this, item, item_ref](std::string str) -> void {
 			DownloadItem _item = item;

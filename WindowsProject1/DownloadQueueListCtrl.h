@@ -28,6 +28,7 @@ public:
 	void Remove(int* rows, int n);
 	void RemoveRefs(DownloadListItem* const* item, int n);
 	DownloadItem& Get(int row);
+	std::vector<DownloadListItem*> GetListItems() { return items; }
 
 	~DownloadQueueListCtrl()
 	{

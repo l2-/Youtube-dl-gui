@@ -25,29 +25,40 @@ SimpleProcess::SimpleProcess(int flags) : wxProcess(flags)
 	});
 }
 
-bool SimpleProcess::HasInput()
+
+bool SimpleProcess::HasErrorInput()
 {
 	bool hasInput = false;
-
-	if (IsInputAvailable())
 	{
-		wxTextInputStream tis(*GetInputStream());
-
-		// this assumes that the output is always line buffered
+		wxTextInputStream tis(*GetErrorStream());
+		// blocking
 		wxString line = tis.ReadLine();
-		ss << line << endl;
-		if (_stdoutCallback != nullptr) { _stdoutCallback(line.ToStdString()); }
+		if (_error_output != nullptr && line.Length() > 0) 
+		{ 
+			_error_output(line.ToStdString());
+			//cout << "YOUTUBE-DL_ERR: " << line.ToStdString() << "." << endl;
+		}
 
 		hasInput = true;
 	}
 
-	if (IsErrorAvailable())
-	{
-		wxTextInputStream tis(*GetErrorStream());
+	return hasInput;
+}
 
-		// this assumes that the output is always line buffered
+bool SimpleProcess::HasInput()
+{
+	bool hasInput = false;
+	{
+		wxTextInputStream tis(*GetInputStream());
+
+		// blocking
 		wxString line = tis.ReadLine();
-		if (_error_output != nullptr) { _error_output(line.ToStdString()); }
+		ss << line << endl;
+		if (_stdoutCallback != nullptr && line.Length() > 0) 
+		{ 
+			_stdoutCallback(line.ToStdString());
+			//cout << "YOUTUBE-DL: " << line.ToStdString() << "." << endl;
+		}
 
 		hasInput = true;
 	}
@@ -61,21 +72,30 @@ void ExeInterface::Execute1(std::string path_to_exe, std::string command, stdout
 	proc->_stdoutCallback = stdout_callback;
 	proc->_outputCallback = output_callback;
 	proc->_error_output = error_output;
-	auto call = [=]()
+
+	int return_code = wxExecute(path_to_exe + command, wxEXEC_ASYNC, proc);
+
+	auto output_call = [=]()
 	{
 		while (!proc->HasTerminated())
 		{
 			proc->HasInput();
-			// busy wait..... dont know wxwidgets alternatice
-			wxMilliSleep(10);
 		}
 
 		delete proc;
 	};
+	SimpleThread* input_thread = new SimpleThread(output_call);
+	input_thread->Run();
 
-	int return_code = wxExecute(path_to_exe + command, wxEXEC_ASYNC, proc);
-	SimpleThread* thread = new SimpleThread(call);
-	thread->Run();
+	auto error_call = [=]()
+	{
+		while (!proc->HasTerminated())
+		{
+			proc->HasErrorInput();
+		}
+	};
+	SimpleThread* error_thread = new SimpleThread(error_call);
+	error_thread->Run();
 }
 
 SimpleThread::SimpleThread(std::function<void()> fn, wxThreadKind kind) : wxThread(kind)

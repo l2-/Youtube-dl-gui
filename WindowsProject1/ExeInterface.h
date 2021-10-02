@@ -32,6 +32,7 @@ public:
 	SimpleProcess(int flags);
 
 	bool HasInput();
+	bool HasErrorInput();
 	virtual void OnTerminate(int pid, int status);
 	bool HasTerminated() { return hasTerminated; }
 };
